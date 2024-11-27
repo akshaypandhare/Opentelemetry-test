@@ -20,7 +20,7 @@ trace.set_tracer_provider(provider)
 tracer = trace.get_tracer("frontend")
 
 # Backend service URL (make sure it matches your Kubernetes service name)
-BACKEND_URL = "http://backend-service:5001/counter"
+BACKEND_URL = "http://backend:80/counter"
 
 @app.route('/')
 def increment_counter():
