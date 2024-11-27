@@ -11,8 +11,7 @@ app = Flask(__name__)
 provider = TracerProvider()
 
 jaeger_exporter = JaegerExporter(
-    agent_host_name="simplest-collector",  # Change this to your Jaeger agent's hostname (if different)
-    agent_port=14268,              # Default Jaeger port
+    endpoint="http://simplest-collector:14268/api/traces"
 )
 
 processor = BatchSpanProcessor(jaeger_exporter)
