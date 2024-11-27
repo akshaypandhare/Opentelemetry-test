@@ -1,28 +1,23 @@
 from flask import Flask, jsonify
 import requests
 from opentelemetry import trace
-from opentelemetry.instrumentation.flask import FlaskInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.sdk.trace.export import (
+    BatchSpanProcessor,
+    ConsoleSpanExporter,
+)
 
 app = Flask(__name__)
 
-# OpenTelemetry setup
-trace.set_tracer_provider(TracerProvider())
-tracer = trace.get_tracer(__name__)
+provider = TracerProvider()
+processor = BatchSpanProcessor(ConsoleSpanExporter())
+provider.add_span_processor(processor)
 
-# Configure Jaeger Exporter
-jaeger_exporter = JaegerExporter(
-    agent_host_name="simplest-collector",  # Replace with Jaeger service hostname in your cluster
-    agent_port=14268,          # Default Jaeger UDP port
-)
-span_processor = BatchSpanProcessor(jaeger_exporter)
-trace.get_tracer_provider().add_span_processor(span_processor)
+# Sets the global default tracer provider
+trace.set_tracer_provider(provider)
 
-FlaskInstrumentor().instrument_app(app)
-RequestsInstrumentor().instrument()
+# Creates a tracer from the global tracer provider
+tracer = trace.get_tracer("frontend")
 
 # Backend service URL (make sure it matches your Kubernetes service name)
 BACKEND_URL = "http://backend-service:5001/counter"
