@@ -2,15 +2,20 @@ from flask import Flask, jsonify
 import requests
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import (
-    BatchSpanProcessor,
-    ConsoleSpanExporter,
-)
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.jaeger import JaegerExporter
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
 
 app = Flask(__name__)
 
 provider = TracerProvider()
-processor = BatchSpanProcessor(ConsoleSpanExporter())
+
+jaeger_exporter = JaegerExporter(
+    agent_host_name="simplest-collector",  # Change this to your Jaeger agent's hostname (if different)
+    agent_port=14268,              # Default Jaeger port
+)
+
+processor = BatchSpanProcessor(jaeger_exporter)
 provider.add_span_processor(processor)
 
 # Sets the global default tracer provider
