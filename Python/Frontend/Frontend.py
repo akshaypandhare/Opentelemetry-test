@@ -3,7 +3,7 @@ import requests
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.trace import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.grpc import OTLPSpanExporter
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 
 app = Flask(__name__)
