@@ -1,6 +1,8 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import requests
 from opentelemetry import trace
+from opentelemetry.propagate import inject
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -34,26 +36,57 @@ tracer = trace.get_tracer("frontend")
 BACKEND_URL = "http://backend:80/counter"
 
 FlaskInstrumentor().instrument_app(app)
+RequestsInstrumentor().instrument()
 
 @app.route('/')
 def increment_counter():
-    with tracer.start_as_current_span("frontend-increment-counter"):
-    # Call the backend service to get the current counter value
-        response = requests.get(BACKEND_URL)
-        if response.status_code == 200:
-            counter = response.json().get('counter')
-            # Increment the counter
-            new_counter = counter + 1
-            
-            # Send the incremented counter value back to the backend to be saved
-            update_response = requests.post(BACKEND_URL, json={'counter': new_counter})
-            
-            if update_response.status_code == 200:
-                return jsonify({'message': 'Counter incremented and saved', 'counter': new_counter}), 200
-            else:
-                return jsonify({'message': 'Error updating counter in backend'}), 500
-        else:
-            return jsonify({'message': 'Error fetching counter from backend'}), 500
+    with tracer.start_as_current_span("frontend-increment-counter") as span:
+        # Prepare headers for context propagation
+        headers = {}
+        inject(headers)  # Inject trace context into headers
+
+        try:
+            # Call the backend service to get the current counter value
+            with tracer.start_as_current_span("get-counter", context=trace.get_current_span().get_span_context()) as get_span:
+                get_span.set_attribute("http.method", "GET")
+                get_span.set_attribute("http.url", BACKEND_URL)
+                
+                response = requests.get(BACKEND_URL, headers=headers)
+                
+                if response.status_code == 200:
+                    counter = response.json().get('counter')
+                    
+                    # Increment the counter
+                    new_counter = counter + 1
+                    
+                    # Send the incremented counter value back to the backend to be saved
+                    with tracer.start_as_current_span("update-counter", context=trace.get_current_span().get_span_context()) as update_span:
+                        update_span.set_attribute("http.method", "POST")
+                        update_span.set_attribute("http.url", BACKEND_URL)
+                        
+                        update_response = requests.post(BACKEND_URL, 
+                                                        json={'counter': new_counter}, 
+                                                        headers=headers)
+                        
+                        if update_response.status_code == 200:
+                            span.set_attribute("app.counter.value", new_counter)
+                            return jsonify({
+                                'message': 'Counter incremented and saved', 
+                                'counter': new_counter
+                            }), 200
+                        else:
+                            span.set_status(trace.Status(trace.StatusCode.ERROR))
+                            span.record_exception(Exception("Backend update failed"))
+                            return jsonify({'message': 'Error updating counter in backend'}), 500
+                else:
+                    span.set_status(trace.Status(trace.StatusCode.ERROR))
+                    span.record_exception(Exception("Backend fetch failed"))
+                    return jsonify({'message': 'Error fetching counter from backend'}), 500
+        
+        except Exception as e:
+            span.set_status(trace.Status(trace.StatusCode.ERROR))
+            span.record_exception(e)
+            return jsonify({'message': f'Unexpected error: {str(e)}'}), 500
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
