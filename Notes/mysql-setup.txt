@@ -1,0 +1,45 @@
+Commands to create DB and tables in the mysql statefulset.
+
+MySQL Setup Commands
+Access the MySQL Pod: Since your MySQL instance is running in a StatefulSet on Kubernetes, you need to access the pod running MySQL to execute the following commands.
+
+You can get into the MySQL pod using kubectl:
+
+bash
+Copy code
+kubectl exec -it <mysql-pod-name> -- bash
+Login to MySQL: Inside the pod, log into the MySQL shell:
+
+bash
+Copy code
+mysql -u root -p
+Enter the password (testpassword in this case).
+
+Create the Database: Once logged in, create the database testdb:
+
+sql
+Copy code
+CREATE DATABASE testdb;
+Use the Database:
+
+sql
+Copy code
+USE testdb;
+Create the Counter Table: Create a table called counter with columns for the id and value (counter):
+
+sql
+Copy code
+CREATE TABLE counter (
+    id INT PRIMARY KEY,
+    value INT NOT NULL
+);
+Insert Initial Counter Value: Insert an initial counter value of 0 into the table:
+
+sql
+Copy code
+INSERT INTO counter (id, value) VALUES (1, 0);
+Exit MySQL: After the setup, you can exit MySQL by typing:
+
+sql
+Copy code
+EXIT;

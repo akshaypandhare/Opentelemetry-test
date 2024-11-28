@@ -1,8 +1,35 @@
 from flask import Flask, jsonify, request
 import mysql.connector
-import os
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+
+resource = Resource.create({
+    "service.name": "backend",  # Replace with your desired service name
+    "service.version": "1.0.0"  # Optional: add version information
+})
+
+provider = TracerProvider(resource=resource)
+
+jaeger_exporter = JaegerExporter(
+    agent_host_name="simplest-agent.default.svc.cluster.local",  # Adjust to your Jaeger agent service
+    agent_port=6831,
+)
+processor = BatchSpanProcessor(jaeger_exporter)
+provider.add_span_processor(processor)
+
+# Sets the global default tracer provider
+trace.set_tracer_provider(provider)
+
+# Creates a tracer from the global tracer provider
+tracer = trace.get_tracer("frontend")
 
 app = Flask(__name__)
+
+FlaskInstrumentor().instrument_app(app)
 
 # MySQL database connection settings (make sure these are correct for your setup)
 MYSQL_HOST = "mysql-service.default.svc.cluster.local"  # Kubernetes service name
