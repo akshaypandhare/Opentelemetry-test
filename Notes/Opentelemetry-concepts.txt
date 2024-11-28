@@ -1,0 +1,259 @@
+Opentelemetry important components while instrumenting the code.
+
+Tracer Provider (TracerProvider):
+The Tracer Provider is the core component that manages trace generation and processing. It's essentially a factory that creates tracers and controls how traces are generated and exported.
+
+pythonCopy# Basic Tracer Provider creation
+from opentelemetry.sdk.trace import TracerProvider
+
+# Create a basic tracer provider
+provider = TracerProvider()
+
+Resource:
+A Resource represents the entity producing telemetry. It adds contextual information to all traces, helping identify where the trace originated.
+
+pythonCopyfrom opentelemetry.sdk.resources import Resource
+
+# Create a resource with service information
+resource = Resource.create({
+    "service.name": "user-service",  # Identifies the service
+    "service.version": "1.0.0",      # Version of the service
+    "deployment.environment": "production"  # Additional context
+})
+
+# Use the resource when creating the tracer provider
+provider = TracerProvider(resource=resource)
+
+Span Processor:
+A Span Processor intercepts spans as they are created. It can modify, filter, or export spans to different backends.
+
+pythonCopyfrom opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+
+# Create a Jaeger exporter
+jaeger_exporter = JaegerExporter(
+    agent_host_name="localhost",
+    agent_port=6831
+)
+
+# Create a batch span processor
+processor = BatchSpanProcessor(jaeger_exporter)
+
+# Add processor to the tracer provider
+provider.add_span_processor(processor)
+
+Global Tracer Provider:
+Setting a global tracer provider allows you to create tracers consistently across your application.
+
+pythonCopyfrom opentelemetry import trace
+
+# Set the global tracer provider
+trace.set_tracer_provider(provider)
+
+# Get a tracer from the global provider
+tracer = trace.get_tracer("my_application")
+
+Complete Example Putting It All Together:
+
+pythonCopyfrom opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+
+# 1. Create a Resource
+resource = Resource.create({
+    "service.name": "order-service",
+    "service.version": "1.2.0",
+    "environment": "production"
+})
+
+# 2. Create a Tracer Provider with the Resource
+provider = TracerProvider(resource=resource)
+
+# 3. Create a Span Processor with an Exporter
+jaeger_exporter = JaegerExporter(
+    agent_host_name="jaeger-agent.monitoring.svc.cluster.local",
+    agent_port=6831
+)
+processor = BatchSpanProcessor(jaeger_exporter)
+provider.add_span_processor(processor)
+
+# 4. Set Global Tracer Provider
+trace.set_tracer_provider(provider)
+
+# 5. Get a Tracer
+tracer = trace.get_tracer("order-processing")
+
+# Example of using the tracer
+def process_order():
+    # Start a span
+    with tracer.start_as_current_span("process_order"):
+        # Your order processing logic
+        pass
+Key Concepts Explained:
+
+Resource: Adds metadata about the service
+TracerProvider: Manages trace generation
+BatchSpanProcessor: Collects and exports spans in batches
+JaegerExporter: Sends traces to Jaeger for visualization
+trace.set_tracer_provider(): Makes the provider globally available
+trace.get_tracer(): Retrieves a tracer for creating spans
+
+Typical Flow:
+
+Create a Resource with service details
+Create a TracerProvider
+Add a Span Processor with an Exporter
+Set the global tracer provider
+Get a tracer and start creating spans
+
+
+
+
+
+
+What is a Span in opentelemetry context.
+
+A Span is the fundamental building block of a trace in OpenTelemetry. Think of it as a unit of work or operation that you want to track and monitor. Here's a detailed explanation:
+
+Basic Concept:
+
+pythonCopy# Simple span creation
+with tracer.start_as_current_span("database_operation") as span:
+    # Some work happens here
+    perform_database_query()
+
+Detailed Span Characteristics:
+
+pythonCopy# A more comprehensive span example
+with tracer.start_as_current_span("user_registration") as span:
+    # Add attributes to provide more context
+    span.set_attribute("user.id", user_id)
+    span.set_attribute("user.email", email)
+    
+    try:
+        # Perform some operation
+        create_user_in_database()
+        
+        # Optional: Add an event to the span
+        span.add_event("user_created_successfully")
+    
+    except Exception as e:
+        # Handle and record exceptions
+        span.set_status(Status(StatusCode.ERROR))
+        span.record_exception(e)
+Key Components of a Span:
+
+Name:
+
+A string identifying the operation
+Should be descriptive of the work being done
+Example: "create_user", "database_query", "process_payment"
+
+
+Attributes:
+
+Key-value pairs that add context to the span
+Provide additional information about the operation
+Examples:
+pythonCopyspan.set_attribute("http.method", "GET")
+span.set_attribute("http.url", "/users")
+span.set_attribute("user.age", 30)
+
+
+
+Events:
+
+Time-stamped logs attached to a span
+Useful for recording significant moments
+
+pythonCopyspan.add_event("cache_miss")
+span.add_event("retry_attempt", {
+    "attempt_number": 1,
+    "delay": "2s"
+})
+
+Status:
+
+Indicates the result of the operation
+
+pythonCopyfrom opentelemetry.trace.status import Status, StatusCode
+
+# Mark span as successful
+span.set_status(Status(StatusCode.OK))
+
+# Mark span as failed
+span.set_status(Status(StatusCode.ERROR))
+
+Parent-Child Relationship:
+
+pythonCopy# Nested spans demonstrate hierarchical operations
+def process_order():
+    with tracer.start_as_current_span("process_order") as order_span:
+        # Child span for database operation
+        with tracer.start_as_current_span("save_order_to_db") as db_span:
+            save_order_to_database()
+        
+        # Another child span for notification
+        with tracer.start_as_current_span("send_confirmation_email") as email_span:
+            send_email_confirmation()
+Practical Example in a Web Application:
+pythonCopy@app.route('/user')
+def create_user():
+    # Start a root span for the entire request
+    with tracer.start_as_current_span("create_user_request") as request_span:
+        try:
+            # Validate input
+            with tracer.start_as_current_span("validate_user_input") as validation_span:
+                validate_user_data()
+            
+            # Database operation
+            with tracer.start_as_current_span("save_user_to_database") as db_span:
+                user_id = save_user()
+                db_span.set_attribute("user.id", user_id)
+            
+            # Send welcome email
+            with tracer.start_as_current_span("send_welcome_email") as email_span:
+                send_welcome_email(user_id)
+            
+            # Mark the overall request as successful
+            request_span.set_status(Status(StatusCode.OK))
+            return jsonify({"status": "success", "user_id": user_id})
+        
+        except ValidationError as e:
+            # Handle and record validation errors
+            request_span.set_status(Status(StatusCode.ERROR))
+            request_span.record_exception(e)
+            return jsonify({"error": "Invalid input"}), 400
+        except Exception as e:
+            # Handle unexpected errors
+            request_span.set_status(Status(StatusCode.ERROR))
+            request_span.record_exception(e)
+            return jsonify({"error": "Internal server error"}), 500
+Key Takeaways:
+
+A span represents a single unit of work
+Spans can be nested to show hierarchical operations
+They provide rich context through attributes, events, and status
+Help in understanding the flow and performance of your application
+
+
+
+Automatic Instrumentation (e.g., FlaskInstrumentor().instrument_app(app))
+Purpose: Automatically collects traces for common operations in your framework (like Flask) without requiring you to modify your application's core logic.
+What it does:
+It tracks HTTP requests to your Flask app (e.g., request start and end times).
+It creates spans for each request with basic metadata such as HTTP method, URL, response status code, and timing.
+It integrates with supported libraries (e.g., requests, mysql-connector-python) to create spans for outbound HTTP requests and database operations.
+Limitations:
+It provides high-level information, but it won't capture detailed traces of specific business logic or custom operations within your application.
+For custom spans or detailed traces, you still need to instrument your code manually.
+Manual Instrumentation
+Purpose: Allows you to capture detailed traces for specific parts of your application's logic that are not automatically instrumented.
+What it does:
+Enables you to create custom spans for important operations or critical code paths that you want to monitor in depth.
+Helps add attributes, events, and logs to spans to provide additional context about the operation.
+When to use:
+If you need to trace a specific function, loop, or business logic step.
+For tracking custom operations like processing data, internal computations, or domain-specific logic.
