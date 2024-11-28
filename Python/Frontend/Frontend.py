@@ -3,15 +3,16 @@ import requests
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPSpanExporter
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 
 app = Flask(__name__)
 
 provider = TracerProvider()
 
-otlp_exporter = OTLPSpanExporter(
-    endpoint="http://simplest-collector:4317",  # Jaeger's OTLP receiver endpoint (gRPC)
+jaeger_exporter = JaegerExporter(
+    agent_host_name="simplest-agent.default.svc.cluster.local",  # Adjust to your Jaeger agent service
+    agent_port=6831,
 )
 processor = BatchSpanProcessor(jaeger_exporter)
 provider.add_span_processor(processor)
@@ -24,6 +25,8 @@ tracer = trace.get_tracer("frontend")
 
 # Backend service URL (make sure it matches your Kubernetes service name)
 BACKEND_URL = "http://backend:80/counter"
+
+FlaskInstrumentor().instrument_app(app)
 
 @app.route('/')
 def increment_counter():
