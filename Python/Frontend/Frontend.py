@@ -2,13 +2,20 @@ from flask import Flask, jsonify
 import requests
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 
 app = Flask(__name__)
 
-provider = TracerProvider()
+# Set up the tracer provider with a specific service name
+resource = Resource.create({
+    "service.name": "frontend",  # Replace with your desired service name
+    "service.version": "1.0.0"  # Optional: add version information
+})
+
+provider = TracerProvider(resource=resource)
 
 jaeger_exporter = JaegerExporter(
     agent_host_name="simplest-agent.default.svc.cluster.local",  # Adjust to your Jaeger agent service
